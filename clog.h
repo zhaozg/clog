@@ -269,6 +269,9 @@ struct clog {
 
     /* Tracks whether the fd needs to be closed eventually. */
     int opened;
+
+    /* If is atty, flush data */
+    int isatty;
 };
 
 void _clog_err(const char *fmt, ...);
@@ -301,6 +304,7 @@ clog_init_path(int id, const char *const path)
         return 1;
     }
     _clog_loggers[id]->opened = 1;
+    _clog_loggers[id]->isatty = isatty(fd);
     return 0;
 }
 
@@ -578,7 +582,12 @@ _clog_log(const char *sfile, int sline, enum clog_level level,
             }
             return;
         }
-        result = write(logger->fd, message, strlen(message));
+        do {
+            result = write(logger->fd, message, strlen(message));
+            if (logger->isatty)
+                fsync(logger->fd);
+        } while (result==-1 && errno == EAGAIN);
+
         if (result == -1) {
             _clog_err("Unable to write to log file: %s\n", strerror(errno));
         }
