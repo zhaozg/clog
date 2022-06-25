@@ -585,7 +585,13 @@ _clog_log(const char *sfile, int sline, enum clog_level level,
         do {
             result = write(logger->fd, message, strlen(message));
             if (logger->isatty)
+            {
+#ifdef WIN32
+                _commit(logger->fd);
+#else
                 fsync(logger->fd);
+#endif
+            }
         } while (result==-1 && errno == EAGAIN);
 
         if (result == -1) {
