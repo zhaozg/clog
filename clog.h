@@ -231,6 +231,8 @@ int clog_set_date_fmt(int id, const char *fmt);
  */
 int clog_set_fmt(int id, const char *fmt);
 
+int clog_log(struct clog *logger, const char *data, size_t sz);
+
 /*
  * No need to read below this point.
  */
@@ -529,6 +531,25 @@ _clog_format(const struct clog *logger, char buf[], size_t buf_size,
     return result;
 }
 
+int
+clog_log(struct clog *logger, const char *data, size_t sz)
+{
+    int result = 0;
+
+    do {
+        result = write(logger->fd, data, sz);
+        if (logger->isatty)
+        {
+#ifdef WIN32
+            _commit(logger->fd);
+#else
+            fsync(logger->fd);
+#endif
+        }
+    } while (result==-1 && errno == EAGAIN);
+    return result;
+}
+
 void
 _clog_log(const char *sfile, int sline, enum clog_level level,
           int id, const char *fmt, va_list ap)
@@ -582,18 +603,7 @@ _clog_log(const char *sfile, int sline, enum clog_level level,
             }
             return;
         }
-        do {
-            result = write(logger->fd, message, strlen(message));
-            if (logger->isatty)
-            {
-#ifdef WIN32
-                _commit(logger->fd);
-#else
-                fsync(logger->fd);
-#endif
-            }
-        } while (result==-1 && errno == EAGAIN);
-
+        result = clog_log(logger, message, strlen(message));
         if (result == -1) {
             _clog_err("Unable to write to log file: %s\n", strerror(errno));
         }
