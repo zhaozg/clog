@@ -71,7 +71,22 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#ifdef _MSC_VER
+#include <io.h>
+
+#ifndef STDOUT_FILENO
+#define STDOUT_FILENO _fileno(stdout)
+#endif
+#ifndef STDERR_FILENO
+#define STDERR_FILENO _fileno(stderr)
+#endif
+#ifndef STDIN_FILENO
+#define STDIN_FILENO _fileno(stdin)
+#endif
+
+#else
 #include <unistd.h>
+#endif
 
 /* Number of loggers that can be defined. */
 #define CLOG_MAX_LOGGERS 16
