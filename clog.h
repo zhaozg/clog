@@ -132,6 +132,21 @@ struct clog;
 int clog_init_path(int id, const char *const path);
 
 /**
+ * Rotate logger with the given file path.  The file will be rotated with .old
+ * suffixes, and create new one.
+ *
+ * @param id
+ * A constant integer between 0 and 15 that uniquely identifies this logger.
+ *
+ * @param path
+ * Path to the file where log messages will be written.
+ *
+ * @return
+ * Zero on success, non-zero on failure.
+ */
+int clog_rotate(int id, const char *const path);
+
+/**
  * Create a new logger writing to a file descriptor.
  *
  * @param id
@@ -301,6 +316,10 @@ extern struct clog *_clog_loggers[CLOG_MAX_LOGGERS];
 
 #ifdef CLOG_MAIN
 
+#ifdef WIN32
+#define fsync _commit
+#endif
+
 const char *const CLOG_LEVEL_NAMES[] = {
     "DEBUG",
     "INFO",
@@ -322,6 +341,36 @@ clog_init_path(int id, const char *const path)
     }
     _clog_loggers[id]->opened = 1;
     _clog_loggers[id]->isatty = isatty(fd);
+    return 0;
+}
+
+int
+clog_rotate(int id, const char *const path)
+{
+    struct clog *logger = _clog_loggers[id];
+    int fd;
+    char old_path[4096] = { 0 };
+    if (logger == NULL) {
+        _clog_err("Logger %d not initialized.\n", id);
+        return 1;
+    }
+    if (!logger->opened) {
+        _clog_err("Logger %d not opened by clog.\n", id);
+        return 1;
+    }
+
+    snprintf(old_path, sizeof(old_path), "%s.old", path);
+    rename(path, old_path);
+
+    fd = logger->fd;
+    logger->fd = open(path, O_CREAT | O_WRONLY | O_APPEND, 0666);
+    if (logger->fd == -1) {
+        _clog_err("Unable to rotate %s: %s\n", path, strerror(errno));
+        return 1;
+    }
+
+    fsync(fd);
+    close(fd);
     return 0;
 }
 
@@ -555,11 +604,7 @@ clog_log(struct clog *logger, const char *data, size_t sz)
         result = write(logger->fd, data, sz);
         if (logger->isatty)
         {
-#ifdef WIN32
-            _commit(logger->fd);
-#else
             fsync(logger->fd);
-#endif
         }
     } while (result==-1 && errno == EAGAIN);
     return result;
