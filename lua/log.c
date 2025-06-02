@@ -6,10 +6,10 @@
 
 #define MT_NAME "log_t"
 
-typedef struct uv_buf_t {
+typedef struct log_buf_t {
   char* base;    // 指向缓冲区的起始地址
   size_t len;    // 缓冲区的长度（字节数）
-} uv_buf_t;
+} log_buf_t;
 
 static const char *const lvl_options[] = {
     "DEBUG", "INFO", "WARN", "ERROR", NULL,
@@ -302,7 +302,7 @@ static int log_clog(lua_State *L) {
 }
 
 void clog_buffer(const char *sfile, int sline, int id, int level,
-                 const char *title, const uv_buf_t buf) {
+                 const char *title, const log_buf_t buf) {
   char str[4096];
   char txt[17];
   size_t i, idx = 0;
@@ -381,7 +381,7 @@ static int log_buffer(lua_State *L) {
       luaL_argerror(L, 2, "Invalid string to log");
       return 0;
     } else {
-      uv_buf_t buf = {0};
+      log_buf_t buf = {0};
       buf.base = (char *)msg;
       buf.len = sz;
       clog_buffer(ar.short_src, ar.currentline, id, CLOG_DEBUG, title, buf);
