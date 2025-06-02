@@ -30,7 +30,7 @@ void error(const char *fmt, ...)
     error_text[16383] = 0;
 }
 
-int test_double_init()
+int test_double_init(void)
 {
     CHECK_CALL(clog_init_path(0, TEST_FILE));
     if (clog_init_path(0, TEST_FILE) == 0) {
@@ -40,7 +40,7 @@ int test_double_init()
     return 0;
 }
 
-int test_file_write()
+int test_file_write(void)
 {
     FILE *f = NULL;
     char buf[256];
@@ -67,7 +67,7 @@ int test_file_write()
     return 0;
 }
 
-int test_file_write_nonexistent()
+int test_file_write_nonexistent(void)
 {
     /* Expected to fail, so success is bad */
     if (clog_init_path(0, "path-doesnt-exist/log.out") == 0) {
@@ -80,7 +80,7 @@ int test_file_write_nonexistent()
     return 0;
 }
 
-int test_fd_write()
+int test_fd_write(void)
 {
     char buf[1024];
     int fd[2];
@@ -105,7 +105,7 @@ int test_fd_write()
     return 0;
 }
 
-int test_all_levels()
+int test_all_levels(void)
 {
     char buf[1024];
     int fd[2];
@@ -138,7 +138,7 @@ int test_all_levels()
     return 0;
 }
 
-int test_level_filtering()
+int test_level_filtering(void)
 {
     char buf[1024];
     int fd[2];
@@ -172,7 +172,7 @@ int test_level_filtering()
     return 0;
 }
 
-int test_multiple_loggers()
+int test_multiple_loggers(void)
 {
     char buf[1024];
     size_t bytes;
@@ -203,7 +203,7 @@ int test_multiple_loggers()
     return 0;
 }
 
-int test_bad_format()
+int test_bad_format(void)
 {
     char too_long[300];
     memset(too_long, 'a', 299);
@@ -217,7 +217,7 @@ int test_bad_format()
     return 0;
 }
 
-int test_long_message()
+int test_long_message(void)
 {
     FILE *f = NULL;
     char buf[51000];
@@ -249,7 +249,7 @@ int test_long_message()
     return 0;
 }
 
-int test_performance()
+int test_performance(void)
 {
     const int MICROS_PER_SEC = 1000000;
     const size_t NUM_MESSAGES = 200000;
@@ -283,7 +283,7 @@ int test_performance()
     return 0;
 }
 
-int test_reuse_logger_id()
+int test_reuse_logger_id(void)
 {
     int i;
 
@@ -313,7 +313,7 @@ int test_reuse_logger_id()
     return 0;
 }
 
-typedef int (*test_function_t)();
+typedef int (*test_function_t)(void);
 
 typedef struct {
     const char *name;

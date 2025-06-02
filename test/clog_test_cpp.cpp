@@ -8,7 +8,7 @@
 
 #define THIS_FILE "clog_test_cpp.cpp"
 
-int test_cpp_hello()
+int test_cpp_hello(void)
 {
     std::ostringstream message;
     char buf[1024];

@@ -199,6 +199,11 @@ void clog_warn(const char *sfile, int sline, int id, const char *fmt, ...);
 void clog_error(const char *sfile, int sline, int id, const char *fmt, ...);
 
 /**
+ * General Log functions with log level.
+ */
+void clog_do(enum clog_level level, const char *sfile, int sline, int id, const char *fmt, ...);
+
+/**
  * Set the minimum level of messages that should be written to the log.
  * Messages below this level will not be written.  By default, loggers are
  * created with level == CLOG_DEBUG.
@@ -709,6 +714,15 @@ clog_error(const char *sfile, int sline, int id, const char *fmt, ...)
     va_list ap;
     va_start(ap, fmt);
     _clog_log(sfile, sline, CLOG_ERROR, id, fmt, ap);
+    va_end(ap);
+}
+
+void
+clog_do(enum clog_level lvl, const char *sfile, int sline, int id, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    _clog_log(sfile, sline, lvl, id, fmt, ap);
     va_end(ap);
 }
 

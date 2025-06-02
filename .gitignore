@@ -2,3 +2,6 @@ clog_test
 clog_test.out
 *.swp
 *.o
+*.dSYM
+*.log
+*.log.old

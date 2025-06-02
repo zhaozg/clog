@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 /* A "hello world" test to show that C++ can use the logger without problems. */
-int test_cpp_hello();
+int test_cpp_hello(void);
 
 #ifdef __cplusplus
 } /* extern "C" */

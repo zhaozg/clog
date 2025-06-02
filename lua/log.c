@@ -15,7 +15,8 @@ static const char *const lvl_options[] = {
     "DEBUG", "INFO", "WARN", "ERROR", NULL,
 };
 
-int log_check_level(lua_State *L, int idx) {
+// common functions for loggers
+static int log_check_level(lua_State *L, int idx) {
   int lvl = 0;
 
   if (lua_isnumber(L, idx)) {
@@ -38,6 +39,67 @@ inline static int log_id(lua_State *L, int i) {
   return id;
 }
 
+static const char* log_get_message(lua_State *L, int id, enum clog_level lvl, int idx) {
+  struct clog *log = _clog_loggers[id];
+  if (log && log->level > lvl)
+    return NULL;
+  if (lua_isfunction(L, idx)) {
+    int ret;
+    const char *msg = NULL;
+    lua_pushvalue(L, idx); // push the function
+    ret = lua_pcall(L, 0, 1, 0); // call the function
+    msg = lua_tostring(L, -1);
+    if (ret != LUA_OK) {
+      luaL_error(L, "Error calling function: %s", lua_tostring(L, -1));
+    }
+    lua_pop(L, 1);
+    return msg;
+  }
+  return luaL_checkstring(L, idx);
+}
+
+static const char *log_getinfo(int id, lua_State *L, int idx, int rtlvl, lua_Debug *ar) {
+  int ret;
+  char *fname = (char*)luaL_optstring(L, idx, "");
+
+  struct clog *log = _clog_loggers[id];
+  if (log == NULL) {
+    luaL_error(L, "invalid logger, maybe closed");
+    return fname;
+  }
+  if (strstr(log->fmt, "%f") == NULL) {
+    return fname;
+  }
+
+  ret = lua_getstack(L, rtlvl, ar);
+  if (ret == 0) {
+    luaL_error(L, "invalid stack level");
+    return fname;
+  }
+  ret = lua_getinfo(L, "Sl", ar);
+  if (ret == 0) {
+    luaL_error(L, "invalid option to getinfo");
+    return fname;
+  }
+
+  if (ar->short_src[0] && fname[0] == '\0') {
+    fname = ar->short_src;
+    if (strncmp(fname, "[string \"", 9) == 0) {
+      fname += 9;
+      ret = strlen(fname);
+      if (fname[ret - 1] == ']')
+        fname[ret - 2] = '\0';
+      if (fname[ret - 2] == '"')
+        fname[ret - 2] = '\0';
+    }
+  } else {
+    strncpy(ar->short_src, fname, sizeof(ar->short_src) - 1);
+  }
+
+  return fname;
+}
+
+// lua api implementations
 static int log_tostring(lua_State *L) {
   int id = log_id(L, 1);
   lua_pushfstring(L, "%s: %02x", MT_NAME, id);
@@ -178,93 +240,63 @@ static int log_fmt(lua_State *L) {
   return 2;
 }
 
-static const char *log_getinfo(int id, lua_State *L, int rtlvl, lua_Debug *ar) {
-  int ret;
-  char *fname = "?";
-
-  struct clog *log = _clog_loggers[id];
-  if (log == NULL) {
-    luaL_error(L, "invalid logger, maybe closed");
-    return fname;
-  }
-  if (strstr(log->fmt, "%f") == NULL) {
-    return fname;
-  }
-
-  ret = lua_getstack(L, rtlvl, ar);
-  if (ret == 0) {
-    luaL_error(L, "invalid stack level");
-    return fname;
-  }
-  ret = lua_getinfo(L, "Sl", ar);
-  if (ret == 0) {
-    luaL_error(L, "invalid option to getinfo");
-    return fname;
-  }
-
-  if (ar->short_src[0]) {
-    fname = ar->short_src;
-    if (strncmp(fname, "[string \"", 9) == 0) {
-      fname += 9;
-      ret = strlen(fname);
-      if (fname[ret - 1] == ']')
-        fname[ret - 2] = '\0';
-      if (fname[ret - 2] == '"')
-        fname[ret - 2] = '\0';
-    }
-  }
-
-  return fname;
-}
-
 static int log_debug(lua_State *L) {
-  lua_Debug ar = {0};
   int id = log_id(L, 1);
-  const char *str = luaL_checkstring(L, 2);
-  const char *fname =
-      lua_isnone(L, 3) ? log_getinfo(id, L, 1, &ar) : luaL_optstring(L, 3, "");
-  ar.currentline = luaL_optinteger(L, 4, ar.currentline);
-
-  clog_debug(fname, ar.currentline, id, "%s", str);
+  const char* msg = log_get_message(L, id, CLOG_DEBUG, 2);
+  if (msg) {
+    lua_Debug ar = { 0 };
+    log_getinfo(id, L, 3, 1, &ar);
+    clog_debug(ar.short_src, ar.currentline, id, "%s", msg);
+  }
   lua_pushvalue(L, 1);
   return 1;
 }
 
 static int log_info(lua_State *L) {
-  lua_Debug ar = {0};
   int id = log_id(L, 1);
-  const char *str = luaL_checkstring(L, 2);
-  const char *fname =
-      lua_isnone(L, 3) ? log_getinfo(id, L, 1, &ar) : luaL_optstring(L, 3, "");
-  ar.currentline = luaL_optinteger(L, 4, ar.currentline);
-
-  clog_info(fname, ar.currentline, id, "%s", str);
+  const char* msg = log_get_message(L, id, CLOG_INFO, 2);
+  if (msg) {
+    lua_Debug ar = { 0 };
+    log_getinfo(id, L, 3, 1, &ar);
+    clog_info(ar.short_src, ar.currentline, id, "%s", msg);
+  }
   lua_pushvalue(L, 1);
   return 1;
 }
 
 static int log_warn(lua_State *L) {
-  lua_Debug ar = {0};
   int id = log_id(L, 1);
-  const char *str = luaL_checkstring(L, 2);
-  const char *fname =
-      lua_isnone(L, 3) ? log_getinfo(id, L, 1, &ar) : luaL_optstring(L, 3, "");
-  ar.currentline = luaL_optinteger(L, 4, ar.currentline);
-
-  clog_warn(fname, ar.currentline, id, "%s", str);
+  const char* msg = log_get_message(L, id, CLOG_WARN, 2);
+  if (msg) {
+    lua_Debug ar = { 0 };
+    log_getinfo(id, L, 3, 1, &ar);
+    clog_warn(ar.short_src, ar.currentline, id, "%s", msg);
+  }
   lua_pushvalue(L, 1);
   return 1;
 }
 
 static int log_error(lua_State *L) {
-  lua_Debug ar = {0};
   int id = log_id(L, 1);
-  const char *str = luaL_checkstring(L, 2);
-  const char *fname =
-      lua_isnone(L, 3) ? log_getinfo(id, L, 1, &ar) : luaL_optstring(L, 3, "");
-  ar.currentline = luaL_optinteger(L, 4, ar.currentline);
+  const char* msg = log_get_message(L, id, CLOG_WARN, 2);
+  if (msg) {
+    lua_Debug ar = { 0 };
+    log_getinfo(id, L, 3, 1, &ar);
+    clog_error(ar.short_src, ar.currentline, id, "%s", msg);
+  }
+  lua_pushvalue(L, 1);
+  return 1;
+}
 
-  clog_error(fname, ar.currentline, id, "%s", str);
+static int log_clog(lua_State *L) {
+  int id = log_id(L, 1);
+  enum clog_level lvl = log_check_level(L, 2);
+  const char* msg = log_get_message(L, id, lvl, 3);
+  if (msg) {
+    lua_Debug ar = { 0 };
+    log_getinfo(id, L, 4, 1, &ar);
+    clog_do(lvl, ar.short_src, ar.currentline, id, "%s", msg);
+  }
   lua_pushvalue(L, 1);
   return 1;
 }
@@ -325,18 +357,36 @@ void clog_buffer(const char *sfile, int sline, int id, int level,
 
 static int log_buffer(lua_State *L) {
   int id = log_id(L, 1);
-  size_t sz;
-  const char *str = luaL_checklstring(L, 2, &sz);
-  const char *title = luaL_optstring(L, 3, "");
-  int lvl = luaL_optinteger(L, 4, 0);
+  struct clog *log = _clog_loggers[id];
 
-  uv_buf_t buf = {0};
-  lua_Debug ar = {0};
-  const char *fname = log_getinfo(id, L, 1, &ar);
+  if (log && log->level == CLOG_DEBUG) {
+    size_t sz;
+    const char *msg;
+    const char *title;
+    lua_Debug ar = { 0 };
 
-  buf.base = (char *)str;
-  buf.len = sz;
-  clog_buffer(fname, ar.currentline, id, lvl, title, buf);
+    if (lua_isfunction(L, 2)) {
+      lua_pushvalue(L, 2); // push the function
+      lua_pcall(L, 0, 1, 0); // call the function
+      msg = lua_tolstring(L, -1, &sz);
+      lua_pop(L, 1);
+    } else {
+      msg = luaL_checklstring(L, 2, &sz);
+    }
+    title = luaL_optstring(L, 3, "");
+    log_getinfo(id, L, 4, 1, &ar);
+    if (msg == NULL || sz == 0) {
+      clog_error(ar.short_src, ar.currentline, id,
+                 "Invalid NULL string to log: %s", title);
+      luaL_argerror(L, 2, "Invalid string to log");
+      return 0;
+    } else {
+      uv_buf_t buf = {0};
+      buf.base = (char *)msg;
+      buf.len = sz;
+      clog_buffer(ar.short_src, ar.currentline, id, CLOG_DEBUG, title, buf);
+    }
+  }
   lua_pushvalue(L, 1);
   return 1;
 }
@@ -351,6 +401,7 @@ static const luaL_Reg log_funcs[] = {{"close", log_close},
                                      {"time_fmt", log_time_fmt},
                                      {"fmt", log_fmt},
 
+                                     {"log", log_clog},
                                      {"debug", log_debug},
                                      {"info", log_info},
                                      {"warn", log_warn},

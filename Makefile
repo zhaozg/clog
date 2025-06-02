@@ -4,7 +4,7 @@ all:
 	@echo "To run tests, run 'make check'."
 
 lua:
-	$(CC) -shared -o log.so -fPIC -Wall lua/log.c $(shell pkg-config --cflags --libs luajit)
+	$(CC) -shared -o log.so -g -Og -fPIC -Wall lua/log.c $(shell pkg-config --cflags --libs luajit)
 	luajit test/test-log.lua
 
 check:
