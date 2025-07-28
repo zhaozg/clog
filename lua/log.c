@@ -58,9 +58,10 @@ static const char* log_get_message(lua_State *L, int id, enum clog_level lvl, in
   return luaL_checkstring(L, idx);
 }
 
-static const char *log_getinfo(int id, lua_State *L, int idx, int rtlvl, lua_Debug *ar) {
+static const char *log_getinfo(int id, lua_State *L, int idx, lua_Debug *ar) {
   int ret;
-  char *fname = (char*)luaL_optstring(L, idx, "");
+  const char *fname = "?";
+  int rtlvl = -1;  // default to -1, not capture stack level
 
   struct clog *log = _clog_loggers[id];
   if (log == NULL) {
@@ -71,29 +72,41 @@ static const char *log_getinfo(int id, lua_State *L, int idx, int rtlvl, lua_Deb
     return fname;
   }
 
-  ret = lua_getstack(L, rtlvl, ar);
-  if (ret == 0) {
-    luaL_error(L, "invalid stack level");
-    return fname;
-  }
-  ret = lua_getinfo(L, "Sl", ar);
-  if (ret == 0) {
-    luaL_error(L, "invalid option to getinfo");
-    return fname;
+  if (lua_type(L, idx) == LUA_TSTRING) {
+    fname = lua_tostring(L, idx);
+    rtlvl = luaL_optinteger(L, idx+1, rtlvl);
+  } else {
+    rtlvl = luaL_optinteger(L, idx, rtlvl);
   }
 
-  if (ar->short_src[0] && fname[0] == '\0') {
-    fname = ar->short_src;
-    if (strncmp(fname, "[string \"", 9) == 0) {
-      fname += 9;
-      ret = strlen(fname);
-      if (fname[ret - 1] == ']')
-        fname[ret - 2] = '\0';
-      if (fname[ret - 2] == '"')
-        fname[ret - 2] = '\0';
+  if (rtlvl > 0) {
+    ret = lua_getstack(L, rtlvl, ar);
+    if (ret == 0) {
+      luaL_error(L, "invalid stack level");
+      return fname;
+    }
+    ret = lua_getinfo(L, "Sl", ar);
+    if (ret == 0) {
+      luaL_error(L, "invalid option to getinfo");
+      return fname;
+    }
+
+    if (ar->short_src[0] && fname[0] == '?') {
+      fname = ar->short_src;
+      if (strncmp(fname, "[string \"", 9) == 0) {
+        fname += 9;
+        ret = strlen(fname);
+        if (fname[ret - 1] == ']')
+          ((char*)fname)[ret - 2] = '\0';
+        if (fname[ret - 2] == '"')
+          ((char*)fname)[ret - 2] = '\0';
+      }
+    } else {
+      strncpy(ar->short_src, fname, sizeof(ar->short_src) - 1);
     }
   } else {
-    strncpy(ar->short_src, fname, sizeof(ar->short_src) - 1);
+    strncpy(ar->short_src, "?", 1);
+    ar->currentline = 0;
   }
 
   return fname;
@@ -245,7 +258,7 @@ static int log_debug(lua_State *L) {
   const char* msg = log_get_message(L, id, CLOG_DEBUG, 2);
   if (msg) {
     lua_Debug ar = { 0 };
-    log_getinfo(id, L, 3, 1, &ar);
+    log_getinfo(id, L, 3, &ar);
     clog_debug(ar.short_src, ar.currentline, id, "%s", msg);
   }
   lua_pushvalue(L, 1);
@@ -257,7 +270,7 @@ static int log_info(lua_State *L) {
   const char* msg = log_get_message(L, id, CLOG_INFO, 2);
   if (msg) {
     lua_Debug ar = { 0 };
-    log_getinfo(id, L, 3, 1, &ar);
+    log_getinfo(id, L, 3, &ar);
     clog_info(ar.short_src, ar.currentline, id, "%s", msg);
   }
   lua_pushvalue(L, 1);
@@ -269,7 +282,7 @@ static int log_warn(lua_State *L) {
   const char* msg = log_get_message(L, id, CLOG_WARN, 2);
   if (msg) {
     lua_Debug ar = { 0 };
-    log_getinfo(id, L, 3, 1, &ar);
+    log_getinfo(id, L, 3, &ar);
     clog_warn(ar.short_src, ar.currentline, id, "%s", msg);
   }
   lua_pushvalue(L, 1);
@@ -281,7 +294,7 @@ static int log_error(lua_State *L) {
   const char* msg = log_get_message(L, id, CLOG_WARN, 2);
   if (msg) {
     lua_Debug ar = { 0 };
-    log_getinfo(id, L, 3, 1, &ar);
+    log_getinfo(id, L, 3, &ar);
     clog_error(ar.short_src, ar.currentline, id, "%s", msg);
   }
   lua_pushvalue(L, 1);
@@ -294,7 +307,7 @@ static int log_clog(lua_State *L) {
   const char* msg = log_get_message(L, id, lvl, 3);
   if (msg) {
     lua_Debug ar = { 0 };
-    log_getinfo(id, L, 4, 1, &ar);
+    log_getinfo(id, L, 4, &ar);
     clog_do(lvl, ar.short_src, ar.currentline, id, "%s", msg);
   }
   lua_pushvalue(L, 1);
@@ -374,7 +387,7 @@ static int log_buffer(lua_State *L) {
       msg = luaL_checklstring(L, 2, &sz);
     }
     title = luaL_optstring(L, 3, "");
-    log_getinfo(id, L, 4, 1, &ar);
+    log_getinfo(id, L, 4, &ar);
     if (msg == NULL || sz == 0) {
       clog_error(ar.short_src, ar.currentline, id,
                  "Invalid NULL string to log: %s", title);
